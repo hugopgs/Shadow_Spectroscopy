@@ -40,12 +40,13 @@ The `ShadowSpectro` class integrates classical shadow techniques with spectral a
 The shadow spectroscopy process consists of the following steps:
 
 ### Step 1: Classical Shadows
+
 1. Using classical shadow, calculate for Nt time stepes the expectation value of all the k-pauli observable. The results can be represented in a Matrix with $N_o$ column representing  the expectation value of all the No observables and $N_t$ lines representing the time evolution of the expectation value of the $N_o$ observables. We call D that matrix. 
-2.Standardize the columns of the matrix D
+2. Standardize the columns of the matrix D
  
 ### Step 2: Spectral Analysis
-Using the snapshots:
-1. Compute the correlation matrix.
+
+1. Compute the correlation matrix. $C=DD^T$
 2. Extract the dominant eigenvectors.
 3. Perform spectral analysis to identify key frequencies and amplitudes.
 4. The highest 
