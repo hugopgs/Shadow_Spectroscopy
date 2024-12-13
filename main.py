@@ -3,9 +3,9 @@ from qiskit import QuantumCircuit
 from scipy.linalg import expm
 import numpy as np
 
-from Shadow_Spectro import ClassicalShadow
-from Shadow_Spectro import Spectroscopy
-from Shadow_Spectro import ShadowSpectro
+from Shadow_Spectro.ClassicalShadow import ClassicalShadow
+from Shadow_Spectro.Spectroscopy import Spectroscopy
+from Shadow_Spectro.ShadowSpectro import ShadowSpectro
 
 
 def Generate_Unitary_Hermitian_Matrix(numQbits,eigenvalues):
