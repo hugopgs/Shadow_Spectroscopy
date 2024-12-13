@@ -21,13 +21,10 @@ def Generate_Unitary_Hermitian_Matrix(numQbits,eigenvalues):
     diagonal_matrix = np.identity(2**numQbits)
     k=0
     
-    for eigenvalue, multiplicity in eigenvalues:
-        print(type(multiplicity))           
+    for eigenvalue, multiplicity in eigenvalues:      
         for i in range(multiplicity):
             diagonal_matrix[k+i][k+i]=eigenvalue
         k+=multiplicity
-    
-    print(diagonal_matrix)
     
     # Generate a random unitary matrix (P)
     random_matrix = np.random.randn(2**numQbits, 2**numQbits) + 1j * np.random.randn(2**numQbits, 2**numQbits)
@@ -51,6 +48,7 @@ def Generate_Evolution_Matrix(hermitian_matrix:np.ndarray):
     return hamil
 
 if __name__=='__main__':
+    # parameters
     eigenvalues=[(2,2**5),(8,2**5)]
     Energy_gap=6 #rad/s
     numQbits=6
@@ -71,18 +69,19 @@ if __name__=='__main__':
 
 
     D=[]
-    for t in T:
+    for t in T: 
         C= QuantumCircuit(numQbits)
         C.append(evolution_matrix(t),[i for i in range(numQbits)])
         
         Clifford_array, bits_array=[],[]
-        for i in range(shadow_size):
+        for i in range(shadow_size): #add a clifford gate to all the qubits and measure, this is done "shadow size" times.
             Clifford_gates, bits_string=shadow.classical_shadow(C)
             Clifford_array.append(Clifford_gates)
             bits_array.append(bits_string)
     
-        fkt=shadow_spectro.expectation_value_q_Pauli(Clifford_array,bits_array)
+        fkt=shadow_spectro.expectation_value_q_Pauli(Clifford_array,bits_array) # calculate from the shadow snapshot the expectation value of all the q-pauli-observable
         D.append(fkt.tolist())
+    
     
     D=np.array(D) 
     D= spectro.Ljung_Box_test(shadow_spectro.standardisation(D))
