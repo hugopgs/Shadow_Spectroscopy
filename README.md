@@ -49,7 +49,7 @@ The shadow spectroscopy process consists of the following steps:
 1. Compute the correlation matrix. $C=DD^T$
 2. Extract the dominant eigenvectors.
 3. Perform spectral analysis to identify key frequencies and amplitudes.
-4. The highest 
+4. The highest peak represent the energy difference between the energy level of the hamiltonian
 
 ## Dependencies
 - `numpy`
