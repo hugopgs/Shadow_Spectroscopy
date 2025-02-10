@@ -1,10 +1,13 @@
 import numpy as np
+from math import comb
+import itertools
 import heapq
 from statsmodels.stats.diagnostic import acorr_ljungbox
-
+from functools import reduce 
+from operator import concat 
 
 class Spectroscopy:
-    def __init__(self, Nt:int, dt:float, cutoff=4 ):
+    def __init__(self, Nt:int, dt:float, cutoff: int=4 ):
         """Class constructor for time depandent 2d matrix cross correlation Spectroscopy
 
         Args:
@@ -15,7 +18,22 @@ class Spectroscopy:
         self.dt=dt
         self.Nt=Nt
         self.cutoff=cutoff
+    
+    
+    def standardisation(self, Matrix:np.ndarray)->np.ndarray:
+        """
+        Standardise observables according to the classical shadow.
         
+        Args:
+            vectors: list[float]: vector to standardize
+        Returns:
+            np.ndarray: standardize vector
+        """
+        Matrix=np.transpose(Matrix)
+        standardize_matrix=[]
+        for vector in Matrix:
+             standardize_matrix.append((np.array(vector)-np.mean(vector))/np.std(vector).tolist())
+        return np.transpose(np.array(standardize_matrix))   
     
     def correlation_matrix(self, X:np.ndarray)->np.ndarray:
         """Calculate the correlation matrix of X as C=X.Xt
@@ -30,6 +48,7 @@ class Spectroscopy:
         C =  (X@Xt)
         C=np.array(C)
         return C
+    
     
     def get_dominant_eigenvectors(self, matrix:np.ndarray)-> list:
         """ Return the dominant eigenvectors of the given matrix. i.e. the vectors with highest eigenvalue.
@@ -60,9 +79,8 @@ class Spectroscopy:
         Returns:
             np.ndarray: matrix of the best Nmax column """
         p_values = [acorr_ljungbox( column, lags=len(column)-1, return_df=False)["lb_pvalue"].array for column in np.transpose(matrix)]
-        Matrix_sorted=[]  
         p_values = np.array([p[0] for p in p_values])
-        sorted_indices = np.argsort(p_values)[Nmax:]
+        sorted_indices = np.argsort(p_values)[:Nmax]
         Matrix_sorted = matrix[:, sorted_indices]
         return Matrix_sorted
     
@@ -142,5 +160,19 @@ class Spectroscopy:
 
         
         frequencies = np.linspace(0, 2*np.pi* Nt_corr /total_time_sim, len(solution))
+        results=solution[:int(len(solution)/2)]
+        frequencies=frequencies[:int(len(frequencies)/2)]
+        return results, frequencies
     
+    
+    def Spectroscopy(self, Data_Matrix: np.ndarray, Ljung : bool=True):
+        if Ljung:
+            D =self.Ljung_Box_test(self.standardisation(Data_Matrix))
+        else:
+            D = self.standardisation(Data_Matrix)
+            
+        self.C = self.correlation_matrix(D)
+        self.list_eigenvector=self.get_dominant_eigenvectors(self.C)
+        solution, frequencies= self.spectral_cross_correlation(self.list_eigenvector)
+
         return solution, frequencies
