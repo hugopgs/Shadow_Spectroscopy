@@ -85,7 +85,7 @@ if __name__=='__main__':
     
     D=np.array(D) 
     D= spectro.Ljung_Box_test(shadow_spectro.standardisation(D))
-    C=shadow_spectro.reduction()
+    C=shadow_spectro.reduction(D)
     solution, frequencies=shadow_spectro.shadow_spectro()
     
     import matplotlib.pyplot as plt
