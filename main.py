@@ -57,7 +57,7 @@ if __name__=='__main__':
     T = np.linspace(0,Nt*dt,Nt)#
     shadow_size= 10
     
-    # Generate hermitian matrix and evolution matrix
+    # Generate random hermitian matrix and evolution matrix with wanted eigenvalues
     hermitian_matrix=Generate_Unitary_Hermitian_Matrix(numQbits,eigenvalues)
     evolution_matrix=Generate_Evolution_Matrix(hermitian_matrix)
         
@@ -68,25 +68,10 @@ if __name__=='__main__':
     shadow_spectro=ShadowSpectro(shadow,spectro, numQbits,3)
 
 
-    D=[]
-    for t in T: 
-        C= QuantumCircuit(numQbits)
-        C.append(evolution_matrix(t),[i for i in range(numQbits)])
-        
-        Clifford_array, bits_array=[],[]
-        for i in range(shadow_size): #add a clifford gate to all the qubits and measure, this is done "shadow size" times.
-            Clifford_gates, bits_string=shadow.classical_shadow(C)
-            Clifford_array.append(Clifford_gates)
-            bits_array.append(bits_string)
-    
-        fkt=shadow_spectro.expectation_value_q_Pauli(Clifford_array,bits_array) # calculate from the shadow snapshot the expectation value of all the q-pauli-observable
-        D.append(fkt.tolist())
+######################### Shadow spectroscopy #############################################
+    solution, frequencies=shadow_spectro.shadow_spectro(evolution_matrix,density_matrix=True)
     
     
-    D=np.array(D) 
-    D= spectro.Ljung_Box_test(shadow_spectro.standardisation(D))
-    C=shadow_spectro.reduction(D)
-    solution, frequencies=shadow_spectro.shadow_spectro()
     
     import matplotlib.pyplot as plt
     plt.figure(figsize=(12, 6))
@@ -103,6 +88,56 @@ if __name__=='__main__':
     plt.legend(fontsize=10, loc="best")
 
 
+################################### IMPORTANT ###############################################
+"""
+To calculate The No signals shadow spectroscopy will calculate the evolution matrix of the hamiltonian for differents time t. 
+
+To work the input Hamiltonian need to be either : 
+
+- A function of t that return a qiskit UnitaryOperation.
+
+- Or an Hamiltonian class defined as follow : 
+        - Attributs (at least): nqubits: int
+                                terms: List[Tuple[str, List[int], Callable[[float], float]]]
+        where nqubits is the numbers of qubits and terms represent the differents terms of the Hamiltonian exemple
+        terms=[("ZZ",[0,1], J(t)),("ZZ",[1,2], J(t)),("ZZ",[2,3], J(t))]
+        which is equivalent to a ZZ operation on qubits [0,1], [1,2],[2,3], the coefficient J(t) is a function of t:
+        Exemple of a function that creat such an Hamiltonian : 
+        @dataclass
+        class Hamiltonian:
+            nqubits: int
+            terms: List[Tuple[str, List[int], Callable[[float], float]]]
+
+            def __post_init__(self):
+                print("The number of qubit:" + str(self.nqubits))
+                print("Number of terms in the Hamiltonian:" + str(len(self.terms)))
+            @staticmethod
+            def Transverse_Ising_hamil(n, J, d):
+                terms = [("ZZ", [k, (k + 1)%n], lambda t: -1*J*t)for k in range(n)]
+                terms += [("X", [k], lambda t: -1*d*t) for k in range(n)]
+        
+         - Methods (at least):  gen_quantum_circuit: a method that whatever t return the quantum circuit representation of the Hamiltonian at t ex:
+            def gen_quantum_circuit(self, t: float)->QuantumCircuit:
+                nq=self.nqubits
+                circ = QuantumCircuit(nq)
+                for pauli, qubits, coef in self.get_term(t):
+                    circ.append(self.__rgate(pauli, coef), qubits)
+                return circ
+    
+            def __rgate(self, pauli, r):
+                return {
+                    "X": RXGate(r),
+                    "Z": RZGate(r),
+                    "XX": RXXGate(r),
+                    "YY": RYYGate(r),
+                    "ZZ": RZZGate(r),
+                }[pauli]
+                
+Exemple of Hamiltonian can be found at :                 
+            
 
 
+
+
+"""
     
