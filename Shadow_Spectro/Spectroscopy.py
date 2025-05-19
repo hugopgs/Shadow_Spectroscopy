@@ -1,21 +1,30 @@
-import numpy as np
-from math import comb
-import itertools
+# Written by: Hugo PAGES 
+# Date: 2024-01-05
+
+# Standard library imports
 import heapq
+
+# Third-party imports
+import numpy as np
 from statsmodels.stats.diagnostic import acorr_ljungbox
-from functools import reduce
-from operator import concat
+
 
 
 class Spectroscopy:
-    def __init__(self, Nt: int, dt: float, cutoff: int = 4):
-        """Class constructor for time depandent 2d matrix cross correlation Spectroscopy
+    """
+    Class for performing time-dependent 2D matrix cross-correlation spectroscopy.
 
-        Args:
-            Nt (int): number of time steps
-            dt (float): time step
-            cutoff (int, optional): number of dominant eigenvectors to keep. Defaults to 4.
-        """
+    This class provides tools for analyzing time-series data using classical shadows, 
+    including standardization, correlation matrix computation, eigen-decomposition, 
+    statistical testing (Ljung-Box), and spectral analysis via cross-correlation and SVD.
+
+    Args:
+        Nt (int): Number of time steps.
+        dt (float): Time step size.
+        cutoff (int, optional): Number of dominant eigenvectors to retain. Defaults to 4.
+    """
+    
+    def __init__(self, Nt: int, dt: float, cutoff: int = 4):
         self.dt = dt
         self.Nt = Nt
         self.cutoff = cutoff
@@ -69,19 +78,20 @@ class Spectroscopy:
             vectors.append(eigenvectors[:, index])
         return vectors
 
-    def Ljung_Box_test(self, matrix: np.ndarray, Nmax: int = 100) -> np.ndarray:
+    def Ljung_Box_test(self, matrix: np.ndarray, ratio: int = 10) -> np.ndarray:
         """ Ljung_Box test on the column of the given matrix. Return the best Nmax column as a 2d np.ndarray
 
         Args:
             matrix (np.ndarray): Matrix to conduct the test
-            Nmax (int, optional): Number of column to keep. Default to 100
+            Nmax (int, optional): % of the best column to keep. Defaults to 10.
 
         Returns:
             np.ndarray: matrix of the best Nmax column """
         p_values = [acorr_ljungbox(column, lags=len(
             column)-1, return_df=False)["lb_pvalue"].array for column in np.transpose(matrix)]
         p_values = np.array([p[0] for p in p_values])
-        sorted_indices = np.argsort(p_values)[:Nmax]
+        Nmax= max(100,int(len(p_values)*(ratio/100)))
+        sorted_indices = np.argsort(p_values)[: Nmax]
         Matrix_sorted = matrix[:, sorted_indices]
         return Matrix_sorted
 
@@ -169,7 +179,6 @@ class Spectroscopy:
             D = self.Ljung_Box_test(self.standardisation(Data_Matrix))
         else:
             D = self.standardisation(Data_Matrix)
-
         self.C = self.correlation_matrix(D)
         self.list_eigenvector = self.get_dominant_eigenvectors(self.C)
         solution, frequencies = self.spectral_cross_correlation(

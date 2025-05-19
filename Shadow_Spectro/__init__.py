@@ -24,3 +24,7 @@ __articles__ = [
         "url": "https://arxiv.org/abs/2212.11036"
     }
 ]
+
+from .ClassicalShadow import ClassicalShadow
+from .ShadowSpectro import ShadowSpectro
+from .Spectroscopy import Spectroscopy

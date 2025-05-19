@@ -1,30 +1,65 @@
-from qiskit import QuantumCircuit, transpile
-from qiskit.quantum_info import Pauli
-import random
+# Written by: Hugo PAGES 
+# Date: 2024-01-05
+
+# Standard library imports
+from typing import Union
+
+# Third-party imports
 import numpy as np
-from qiskit.circuit.library import UnitaryGate
+from qiskit import QuantumCircuit, transpile
+from qiskit.circuit.library import UnitaryGate, RXXGate, RYYGate, RZZGate
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error
-from qiskit.circuit.library import RXXGate, RYYGate, RZZGate
+from qiskit.qasm2 import loads, CustomInstruction
 
-# single shot classical shadow
+class GateConstructor:
+    def __init__(self, matrix):
+        self.matrix = matrix
+
+    def __call__(self):
+        return UnitaryGate(self.matrix)
 
 
 class ClassicalShadow:
-    """single shot classical shadow
     """
+    ClassicalShadow represents a single-shot classical shadow for quantum circuits. 
+    It enables the generation of classical shadows through the application of random Clifford gates, measurement, 
+    and post-processing to compute expectation values or density matrices.
 
+    Main functionality:
+    - addition of random Clifford gates for each qubit in the circuit.
+    - Measurement of quantum circuits to obtain bitstring outcomes.
+    - Snapshot of classical shadows, including density matrix reconstruction.
+    - Post-processing capabilities for calculating expectation values from classical shadows.
+
+    Parameters:
+    - noise_error (optional): Specifies noise levels for depolarizing error in the quantum simulator.
+
+    Methods:
+    - `get_bit_string(circ)`: Measures a given quantum circuit and returns the resulting bitstring.
+    - `random_clifford_gate(idx)`: Returns a random Clifford gate from a predefined set.
+    - `add_random_clifford(circuit, copy, backend)`: Adds random Clifford gates to each qubit of a circuit.
+    - `snapshot_classical_shadow(circuit, density_matrix)`: Takes a snapshot of the classical shadow, optionally returning the density matrix.
+    - `classical_shadow(Quantum_circuit, shadow_size, density_matrix)`: Generates multiple snapshots of the classical shadow, potentially averaging density matrices.
+    - `get_expectation_value(obs, unitary_list, measurement_result_list)`: Computes the expectation value of a given Pauli operator from classical shadow data.
+    - `snapshot_density_matrix(unitary_list, measurement_result)`: Reconstructs the density matrix from classical shadow data.
+    - `deserialize_circuit(qasm_str)`: Deserializes a quantum circuit from a QASM string.
+    - `add_clifford_gate_to_qasm(qasm_str)`: Adds random Clifford gates to a QASM string and returns the modified circuit.
+    """
+    def create_gate_function(self, matrix):
+        return GateConstructor(matrix)
+    
     def __init__(self, noise_error=None):
         self.err = noise_error
         if isinstance(self.err, (list, np.ndarray)):
             nm = NoiseModel()
-            nm.add_all_qubit_quantum_error(
-                depolarizing_error(self.err[0], 1), ["x", "z"])
-            nm.add_all_qubit_quantum_error(
-                depolarizing_error(self.err[1], 2), ["rzz", "ryy", "rxx"])
+            nm.add_all_qubit_quantum_error(depolarizing_error(self.err[0], 1), ["x", "z"])
+            nm.add_all_qubit_quantum_error(depolarizing_error(self.err[1], 2), ["rzz", "ryy", "rxx"])
             self.sim = AerSimulator(method="statevector", noise_model=nm)
         else:
+            # Choose simulator without noise model if no error is provided
             self.sim = AerSimulator(method="statevector")
+        
         self.bitstring_matrix0 = np.array([[1, 0], [0, 0]])
         self.bitstring_matrix1 = np.array([[0, 0], [0, 1]])
         self.X = np.array([[0, 1],  [1, 0]])
@@ -38,19 +73,42 @@ class ClassicalShadow:
         self.W = self.V@self.V
         self.gate_set = {"X": self.X, "Y": self.Y, "Z": self.Z, "I": self.I, "S": self.S,
                          "H": self.H, "V": self.V, "W": self.W}
-
-    def get_bit_string(self, circ: QuantumCircuit, shots=1) -> str:
-        """bit string measurement of a given quantum circuit.
-
+        self.Clifford_Gate_set = [
+            "III", "XII", "YII", "ZII", "VII", "VXI", "VYI", "VZI",
+            "WXI", "WYI", "WZI", "HXI", "HYI", "HZI", "HII",
+            "HVI", "HVX", "HVY", "HVZ", "HWI", "HWX",
+            "HWY", "HWZ", "WII"]
+         # Extracting the gate to apply
+        rxx_custom = CustomInstruction(
+        name="rxx", num_params=1, num_qubits=2, builtin=False, constructor=RXXGate)
+        ryy_custom = CustomInstruction(
+            name="ryy", num_params=1, num_qubits=2, builtin=False,  constructor=RYYGate)
+        rzz_custom = CustomInstruction(
+            name="rzz", num_params=1, num_qubits=2, builtin=False, constructor=RZZGate)
+        self.custom_instruction_list=[rxx_custom,ryy_custom,rzz_custom]
+        for gate in self.Clifford_Gate_set:
+            gate_matrix=self.gate_set[gate[0]]@self.gate_set[gate[1]]@self.gate_set[gate[2]]
+            gate_constructor = self.create_gate_function(gate_matrix)
+            gate_instruction=CustomInstruction(
+                name=str.lower(gate), num_params=0, num_qubits=1, builtin=False, constructor=gate_constructor)
+            self.custom_instruction_list.append(gate_instruction)
+ 
+ 
+#####################################################################################################################################
+                ######################### Classical shadow  #######################
+#####################################################################################################################################  
+ 
+            
+    def get_bit_string(self, circ: QuantumCircuit) -> str:
+        """bit string measurement of a given quantum circuit. shot= 1
         Args:
             circ (QuantumCircuit): quantum circuit to measure
             shots (int, optional): number of shots. Defaults to 1.
-
         Returns:
             str: bit string 
         """
         try:
-            counts = self.sim.run(circ, shots=1, ).result().get_counts()
+            counts = self.sim.run(circ, shots=1).result().get_counts()
         except Exception as e:
             counts = self.sim.run(transpile(circ, self.sim),
                                   shots=1).result().get_counts()
@@ -62,25 +120,23 @@ class ClassicalShadow:
         """Get a random clifford gate from the Clifford gate set"""
         if idx is None:
             idx = np.random.randint(0, 23)
-        Clifford_Gate_set = [
-            "III", "XII", "YII", "ZII", "VII", "VXI", "VYI", "VZI",
-            "WXI", "WYI", "WZI", "HXI", "HYI", "HZI", "HII",
-            "HVI", "HVX", "HVY", "HVZ", "HWI", "HWX",
-            "HWY", "HWZ", "WII"]
-        return Clifford_Gate_set[idx]
+        return self.Clifford_Gate_set[idx]
+
 
     def add_random_clifford(self, circuit: QuantumCircuit, copy: bool = False, backend=None) -> tuple[list[UnitaryGate], QuantumCircuit]:
         """Add a random clifford gate for each qubits in a given circuit. add a "measure_all()" instruction after adding the clifford gates.
-
         Args:
             circuit (QuantumCircuit): circuit to add clifford gates
-
-        Returns:
-            tuple[list[UnitaryGate], QuantumCircuit]: the list of clifford gates applied to the circuit and the new circuit with the gate added
+            copy (bool): If True the gate is added to a copy of the circuit, wich does not modified the given circuit. Default to False
+            backend (Qiskit backend): if not None, the return circuit is transpile to the given backend
+        ## returns 
+        if copy:tuple[list[str], QuantumCircuit]: the list of clifford gates applied to the circuit and the new circuit with the gate added. \n
+        if backend not None : tuple[list[str], QuantumCircuit]: the list of clifford gates applied to the circuit and the new circuit transpiled with the gate added.\n
+        else : list[str] The clifford gate added to the circuit       
         """
         num_qubits = circuit.num_qubits
         clifford_gates = [None]*num_qubits
-        if copy:
+        if copy or backend is not None:
             circuit_copy = circuit.copy()
             for qubit in range(num_qubits):
                 gate = self.random_clifford_gate()
@@ -90,7 +146,7 @@ class ClassicalShadow:
             circuit_copy.measure_all()
             if backend is not None:
                 transpiled_circ = transpile(
-                    circuit_copy, backend, optimization_level=1)
+                    circuit_copy, backend, optimization_level=2)
                 return clifford_gates, transpiled_circ
             else:
                 return clifford_gates, circuit_copy
@@ -103,36 +159,52 @@ class ClassicalShadow:
             circuit.measure_all()
             return clifford_gates
 
-    def classical_shadow(self, circuit: QuantumCircuit, density_matrix: bool = False) -> tuple[list[UnitaryGate], str]:
-        """Do one classical shadow shot on a given quantum circuit: 
-        ## Step 1:
-            Add a random clifford gate to the circuit.
-        ## Step 2:
-            get the bit string from the circuit measurement 
-        ## Step 3:
-            return the list of clifford gate added and the bit string 
+    def snapshot_classical_shadow(self, circuit: Union[QuantumCircuit, str], density_matrix: bool = False) -> tuple[list[UnitaryGate], str]:
+        """ A unique snapshot of the circuit: can handle simple qasm circuit. 
+            1. add random clifford to all qubits 
+            2. Measure the bitstring
         Args:
-            circuit (QuantumCircuit): _description_
-        Returns:
-            tuple[list[UnitaryGate], str]: The UnitaryGate added to each Qubit of the circuit, the bit string from measurement 
+            circuit (QuantumCircuit): circuit to add clifford gates
+            density matrix (bool): If True return directly a snapshot of the density matrix. Default to False.\n
+        Returns : 
+            tuple[list[str], str] : The clifford gate added to each qubits and the bit string measurement. \n
+            if density matrix True : np.ndarray (2^nq, 2^nq), The density Matrix.
         """
         if isinstance(circuit, str):
-            circuit = self.__deserialize_circuit(circuit)
-            clifford_gates = self.add_random_clifford(circuit)
-            measurement_result_list = self.get_bit_string(circuit, shots=1)
-            del circuit
+            circuit_str,clifford_gates= self.add_clifford_gate_to_qasm(circuit)
+            circ_copy=self.deserialize_circuit(circuit_str)
+            circ_copy.measure_all()
         else:
-            clifford_gates = self.add_random_clifford(circuit)
-            measurement_result_list = self.get_bit_string(circuit, shots=1)
-            circuit.remove_final_measurements()
-            self.remove_last_single_qubit_gates(circuit)
-
+            circ_copy=circuit.copy()
+            clifford_gates = self.add_random_clifford(circ_copy)
+        measurement_result_list = self.get_bit_string(circ_copy)
         if density_matrix:
             return self.snapshot_density_matrix(clifford_gates, measurement_result_list)
         else:
             return clifford_gates, measurement_result_list
 
+    
+    def classical_shadow(self,Quantum_circuit: Union[QuantumCircuit, str], shadow_size: int, density_matrix: bool=False):
+        """
+        Multiple snapshot of classical shadow : 
+        Args:
+            circuit (QuantumCircuit): circuit to add clifford gates.
+            shadow_size (int): the shadow size 
+            density matrix (bool): If True return the average density matrix over each snapshot. Default to False 
+        """
+        if density_matrix :
+            density_matrix=sum(self.snapshot_classical_shadow(Quantum_circuit, density_matrix=True) for _ in range(shadow_size))
+            return density_matrix/shadow_size
+        snapshots_Clifford, snapshots_bits_string = zip(*[self.snapshot_classical_shadow(Quantum_circuit) for _ in range(shadow_size)]                                                        )
+        return list(snapshots_Clifford), list(snapshots_bits_string)
 
+    
+
+
+
+#####################################################################################################################################
+    ######################### Post processing : get_expectation value or get_density_matrix #######################
+#####################################################################################################################################  
     def get_expectation_value(self, obs: str, unitary_list: list[str], measurement_result_list: str) -> float:
         """
         Get the expectation value from classical shadow
@@ -188,38 +260,77 @@ class ClassicalShadow:
             rho = np.kron(rho, partial_rho)
         return rho
 
-    def remove_last_single_qubit_gates(self, circuit):
-        # Initialize a list to track the last gate indices for each qubit
-        last_single_qubit_gate_indices = [-1] * circuit.num_qubits
-
-        # Traverse the circuit in reverse to find the last single-qubit gate for each qubit
-        for index in range(len(circuit.data) - 1, -1, -1):
-            instruction = circuit.data[index]
-            op = instruction.operation
-            qargs = instruction.qubits
-
-            if len(qargs) == 1:  # Check if it's a single-qubit gate
-                # Get index of the qubit in the circuit
-                qubit_index = circuit.qubits.index(qargs[0])
-
-                # If this is the first last single-qubit gate encountered, record its position
-                if last_single_qubit_gate_indices[qubit_index] == -1:
-                    last_single_qubit_gate_indices[qubit_index] = index
-
-        # Filter the data to exclude the last single-qubit gate for each qubit
-        new_data = [instruction for i, instruction in enumerate(
-            circuit.data) if i not in last_single_qubit_gate_indices]
-        circuit.data = new_data
-
-    def __deserialize_circuit(self, qasm_str):
-        # VERY UNSTABLE, Lot of gates not recognize->prefere clifford circuit without swap gate
+#####################################################################################################################################
+            ######################### Qasm Methods : serialize, deserialize  #######################
+#####################################################################################################################################  
+    def deserialize_circuit(self,qasm_str):
+    # VERY UNSTABLE, Lot of gates not recognize->prefere clifford circuit without swap gate
         """Deserialize a QuantumCircuit from JSON."""
-        from qiskit.qasm2 import loads, CustomInstruction
-        # Define custom instructions for rxx, ryy, and rzz
-        rxx_custom = CustomInstruction(
-            name="rxx", num_params=1, num_qubits=2, builtin=False, constructor=RXXGate)
-        ryy_custom = CustomInstruction(
-            name="ryy", num_params=1, num_qubits=2, builtin=False,  constructor=RYYGate)
-        rzz_custom = CustomInstruction(
-            name="rzz", num_params=1, num_qubits=2, builtin=False, constructor=RZZGate)
-        return loads(qasm_str, custom_instructions=[rxx_custom, ryy_custom, rzz_custom])
+        from qiskit.qasm2 import loads
+        return loads(qasm_str, custom_instructions=self.custom_instruction_list)
+
+    def add_clifford_gate_to_qasm(self, qasm_str: str) -> str:
+        import re
+        
+        qreg_pattern = r'qreg\s+([a-zA-Z0-9_]+)\[(\d+)\];'
+        qreg_matches = re.findall(qreg_pattern, qasm_str)
+        total_qubits = sum(int(size) for _, size in qreg_matches)
+        clifford_gate_def="""
+        // Define v and w
+            gate v a { h a; s a; h a; s a; }
+            gate w a { v a; v a; }
+
+            // Identity gate
+            gate iii a { id a; }
+
+            // Single gates
+            gate xii a { x a; }
+            gate yii a { y a; }
+            gate zii a { z a; }
+            gate vii a { v a; }
+            gate wii a { w a; }
+            gate hii a { h a; }
+
+            // V combinations
+            gate vxi a { v a; x a; }
+            gate vyi a { v a; y a; }
+            gate vzi a { v a; z a; }
+
+            // W combinations
+            gate wxi a { w a; x a; }
+            gate wyi a { w a; y a; }
+            gate wzi a { w a; z a; }
+
+            // H combinations
+            gate hxi a { h a; x a; }
+            gate hyi a { h a; y a; }
+            gate hzi a { h a; z a; }
+
+            // H+V combinations
+            gate hvi a { h a; v a; }
+            gate hvx a { h a; v a; x a; }
+            gate hvy a { h a; v a; y a; }
+            gate hvz a { h a; v a; z a; }
+
+            // H+W combinations
+            gate hwi a { h a; w a; }
+            gate hwx a { h a; w a; x a; }
+            gate hwy a { h a; w a; y a; }
+            gate hwz a { h a; w a; z a; }"""  
+        qasm_str=re.sub(r"(qreg q\[\d+\];\s*)", r"\1" + clifford_gate_def+ "\n", qasm_str)
+        Clifford_gate_list=[]
+        for n in range(total_qubits):
+            gate = self.random_clifford_gate()
+            
+            # Prepare the gate in QASM format
+            qasm_gate = ""
+            qasm_gate = f"{str.lower(gate)} q[{n}];"
+            
+            # Add the new gate to the QASM string
+            qasm_str +=qasm_gate
+            Clifford_gate_list.append(gate)
+
+        # print(qasm_str)
+        return qasm_str, Clifford_gate_list
+    
+ 
