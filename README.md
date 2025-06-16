@@ -1,6 +1,8 @@
 # README: Shadow Spectroscopy
 
-This repository contains three Python classes designed to implement shadow spectroscopy.  Shadow spectroscopy is a simulator-agnostic quantum algorithm for estimating energy gaps using very few circuit repetitions (shots) and no extra resources (ancilla qubits) beyond performing time evolution and measurement base on the followiing paper :  https://arxiv.org/abs/2212.11036, from : Hans Hon Sang Chan, Richard Meister, Matthew L. Goh, Bálint Koczor.
+This repository contains three Python classes designed to implement shadow spectroscopy.  Shadow spectroscopy is a simulator-agnostic quantum algorithm for estimating energy gaps using very few circuit repetitions (shots) and no extra resources (ancilla qubits) beyond performing time evolution and measurement. \
+
+Based on the following paper :  https://arxiv.org/abs/2212.11036, from : Hans Hon Sang Chan, Richard Meister, Matthew L. Goh, Bálint Koczor.
 
 ## Overview of the Classes
 
