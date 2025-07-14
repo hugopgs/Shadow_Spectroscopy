@@ -2,6 +2,7 @@
 # Date: 2024-01-05
 
 # Standard library imports
+import time
 import itertools
 from functools import reduce
 from operator import concat
@@ -52,6 +53,7 @@ class ShadowSpectro:
         self.gate_set = {"X": self.X, "Y": self.Y, "Z": self.Z, "I": self.I, "S": self.S,
                          "H": self.H, "V": self.V, "W": self.W}
         self.num_processes = min(40, int(mp.cpu_count()*0.5))
+        self.multiprocessing=False
 
     def expectation_value_q_pauli(self, snapshots_shadow:Union[np.ndarray, tuple[list[list[str]], list[str]]], multiprocessing: bool=False) -> np.ndarray:
         """Get the expectation value of all k-Pauli Observable from a list of classical snapshot, CliffordGate and bit_string. 
@@ -132,8 +134,31 @@ class ShadowSpectro:
                 q_local.append(tuple(observable))
         return q_local
 
-    def get_snapshots_classical_shadow(self, Quantum_circuit: QuantumCircuit, density_matrix:bool=False) -> tuple[list[list[UnitaryGate]], list[str]]:                                        
-        return self.shadow.classical_shadow(Quantum_circuit, self.shadow_size, density_matrix)
+    def classical_shadow(self, Quantum_circuit: QuantumCircuit, density_matrix:bool=False, multiprocessing: bool=False) -> tuple[list[list[UnitaryGate]], list[str]]:                                        
+        self.multiprocessing=multiprocessing
+        if self.multiprocessing: 
+            res=[]
+            self.density_matrix=density_matrix
+            with mp.Pool(processes=int(self.num_processes)) as pool:
+                res=pool.map(self.get_snapshot_shadow, [Quantum_circuit]*self.shadow_size)
+            pool.close()
+            if not density_matrix:
+                snapshots_Clifford, snapshots_bits_string = zip(*res)
+                snapshots_Clifford=list(snapshots_Clifford)
+                snapshots_bits_string=list(snapshots_bits_string)
+                return snapshots_Clifford, snapshots_bits_string
+            else:
+                res_array = np.array(res)
+                return np.mean(res_array, axis=0)
+        else:
+            return self.shadow.classical_shadow(Quantum_circuit, self.shadow_size, density_matrix)
+            
+    
+    def get_snapshot_shadow(self,Quantum_circuit) -> tuple[list[list[UnitaryGate]], list[str]]:
+        "return a shadow snapshot "
+        return self.shadow.snapshot_classical_shadow(Quantum_circuit, self.density_matrix)
+        
+    
 
     def correlation_matrix(self, D: np.ndarray) -> np.ndarray:
         """Calculate the normalize correlation matrix of X as C=(X.Xt)/No
@@ -148,6 +173,8 @@ class ShadowSpectro:
         C = np.array(C)
         self.C = C
         return C
+
+
 
     def shadow_spectro(self, hamil, init_state: Union[np.ndarray, list, QuantumCircuit] = None, N_Trotter_steps: int = 1000, density_matrix: bool = False, verbose: bool = True, Data_Matrix:bool=False, serialize=False, multiprocessing:bool =False) -> tuple[float, float, np.ndarray, np.ndarray]:
         """
@@ -195,51 +222,28 @@ class ShadowSpectro:
             - `Frequencies` is the array of frequency values.
             Length of both arrays is `N_Trotter_steps // 2`.
         """
-
+        
+        
         D = np.zeros((self.Nt, self.No))
         T = np.linspace(0.00, self.Nt * self.dt, self.Nt)
         is_unitary = isinstance(
             hamil(1), UnitaryGate) if callable(hamil) else False
         self.density_matrix = density_matrix
- 
-        if multiprocessing:
-            C=[]
-            for n, t in tqdm(enumerate(T), desc="generate circuit for multiprocessing", disable=not verbose):
-                if is_unitary:
-                    circ = QuantumCircuit(self.nq)
-                    if isinstance(init_state, (np.ndarray, list)):
-                        circ.initialize(init_state, normalize=True)
-                    circ.append(hamil(t), range(self.nq))
-                    C.append(init_state.compose(circ) if isinstance(
-                        init_state, QuantumCircuit) else circ)
-                else:
-                    C.append(hamil.gen_quantum_circuit(t, init_state=init_state, N_Trotter_steps=N_Trotter_steps, serialize=serialize))
-            self.C=C
-            with mp.Pool(processes=int(self.num_processes/2)) as pool:
-                print("Start multiprocessing")
-                D = np.array(pool.map(self.loop_time_evolve, range(self.Nt)))
-                print("End multiprocessing")
-        else:
-            for n, t in tqdm(enumerate(T), desc="Time evolution", disable=not verbose):
-                if is_unitary:
-                    circ = QuantumCircuit(self.nq)
-                    if isinstance(init_state, (np.ndarray, list)):
-                        circ.initialize(init_state, normalize=True)
-                    circ.append(hamil(t), range(self.nq))
-                    C = init_state.compose(circ) if isinstance(
-                        init_state, QuantumCircuit) else circ
-                else:
-                    C = hamil.gen_quantum_circuit(t, init_state=init_state, N_Trotter_steps=N_Trotter_steps, serialize=serialize)
+        for n, t in tqdm(enumerate(T), desc="Time evolution", disable=not verbose):
+            if is_unitary:
+                circ = QuantumCircuit(self.nq)
+                if isinstance(init_state, (np.ndarray, list)):
+                    circ.initialize(init_state, normalize=True)
+                circ.append(hamil(t), range(self.nq))
+                C = init_state.compose(circ) if isinstance(
+                    init_state, QuantumCircuit) else circ
+            else:
+                C = hamil.gen_quantum_circuit(t, init_state=init_state, N_Trotter_steps=N_Trotter_steps, serialize=serialize)
 
-                if density_matrix:
-                    snapshots_shadow = self.get_snapshots_classical_shadow(C, density_matrix=True)
-
-                else:
-                    snapshots_shadow = self.get_snapshots_classical_shadow(C, density_matrix=False)
-                
-                fkt = self.expectation_value_q_pauli(snapshots_shadow, multiprocessing=True)
-
-                D[n][:] = fkt.tolist()
+            self.multiprocessing=multiprocessing
+            snapshots_shadow = self.classical_shadow(C, self.density_matrix, self.multiprocessing)
+            fkt = self.expectation_value_q_pauli(snapshots_shadow, multiprocessing=True)
+            D[n][:] = fkt
 
         if Data_Matrix:
             return D    
@@ -247,10 +251,6 @@ class ShadowSpectro:
 
         return solution, frequencies
 
-
 ##############################################################################################################################
 
-    def loop_time_evolve(self, nt):   
-        snapshots_shadow = self.get_snapshots_classical_shadow(self.C[nt], density_matrix=False)
-        fkt = self.expectation_value_q_pauli(snapshots_shadow, multiprocessing=False)
-        return  fkt.tolist()
+    

@@ -11,7 +11,7 @@ from qiskit.circuit.library import UnitaryGate, RXXGate, RYYGate, RZZGate
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error
 from qiskit.qasm2 import loads, CustomInstruction
-
+import secrets
 class GateConstructor:
     def __init__(self, matrix):
         self.matrix = matrix
@@ -93,7 +93,6 @@ class ClassicalShadow:
                 name=str.lower(gate), num_params=0, num_qubits=1, builtin=False, constructor=gate_constructor)
             self.custom_instruction_list.append(gate_instruction)
  
- 
 #####################################################################################################################################
                 ######################### Classical shadow  #######################
 #####################################################################################################################################  
@@ -119,10 +118,11 @@ class ClassicalShadow:
     def random_clifford_gate(self, idx: int = None) -> UnitaryGate:
         """Get a random clifford gate from the Clifford gate set"""
         if idx is None:
-            idx = np.random.randint(0, 23)
+            idx_list = [np.random.randint(0, 23) for _ in range(24)]
+            idx=secrets.choice(idx_list)
         return self.Clifford_Gate_set[idx]
 
-
+        
     def add_random_clifford(self, circuit: QuantumCircuit, copy: bool = False, backend=None) -> tuple[list[UnitaryGate], QuantumCircuit]:
         """Add a random clifford gate for each qubits in a given circuit. add a "measure_all()" instruction after adding the clifford gates.
         Args:
