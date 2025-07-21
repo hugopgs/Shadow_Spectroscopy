@@ -69,7 +69,7 @@ if __name__=='__main__':
 
 
 ######################### Shadow spectroscopy #############################################
-    solution, frequencies=shadow_spectro.shadow_spectro(evolution_matrix,density_matrix=True)
+    frequencies,solution=shadow_spectro.shadow_spectro(evolution_matrix,density_matrix=True)
     
     
     

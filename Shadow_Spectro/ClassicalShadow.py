@@ -111,9 +111,12 @@ class ClassicalShadow:
         except Exception as e:
             counts = self.sim.run(transpile(circ, self.sim),
                                   shots=1).result().get_counts()
-        res = list(counts.keys())[0]  # type: ignore
-        del counts
-        return res
+        bit_string=max(counts.items(), key=lambda x: x[1])[0]
+        return bit_string
+        # bit_string_array.append(bit_string)
+        # res = list(counts.keys())[0]  # type: ignore
+        # del counts
+        # return res
 
     def random_clifford_gate(self, idx: int = None) -> UnitaryGate:
         """Get a random clifford gate from the Clifford gate set"""
@@ -146,7 +149,7 @@ class ClassicalShadow:
             circuit_copy.measure_all()
             if backend is not None:
                 transpiled_circ = transpile(
-                    circuit_copy, backend, optimization_level=2)
+                    circuit_copy, backend, optimization_level=3)
                 return clifford_gates, transpiled_circ
             else:
                 return clifford_gates, circuit_copy

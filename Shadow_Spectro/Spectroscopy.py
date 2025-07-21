@@ -5,6 +5,7 @@
 import heapq
 
 # Third-party imports
+from matplotlib import pyplot as plt
 import numpy as np
 from statsmodels.stats.diagnostic import acorr_ljungbox
 
@@ -179,13 +180,17 @@ class Spectroscopy:
             D = self.Ljung_Box_test(self.standardisation(Data_Matrix))
         else:
             D = self.standardisation(Data_Matrix)
-        t = np.arange(self.Nt) * self.dt    
+        t = np.arange(self.Nt) * self.dt   
+        
         damping = np.exp(-alpha* t)       # shape: (Nt,)
         damped_D = D * damping[:, np.newaxis]
-            
+        
         self.C = self.correlation_matrix(damped_D)
+
+
         self.list_eigenvector = self.get_dominant_eigenvectors(self.C)
         solution, frequencies = self.spectral_cross_correlation(
             self.list_eigenvector)
-
-        return solution, frequencies
+           
+        
+        return  frequencies, solution

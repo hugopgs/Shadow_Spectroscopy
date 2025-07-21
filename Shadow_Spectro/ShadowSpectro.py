@@ -14,6 +14,8 @@ from tqdm import tqdm
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import UnitaryGate
 import multiprocessing as mp
+import random
+
 
 
 class ShadowSpectro:
@@ -31,7 +33,10 @@ class ShadowSpectro:
         self.k = k
         self.spectro = spectro
         self.q_Pauli = self.q_local_shadow_observable(self.k)
+        if len(self.q_Pauli)>15_000:
+            self.q_Pauli=random.sample(self.q_Pauli,15000)
         self.No = len(self.q_Pauli)
+
         self.C = np.ndarray
         self.shadow_size = shadow_size
         try:
@@ -247,10 +252,9 @@ class ShadowSpectro:
 
         if Data_Matrix:
             return D    
-        solution, frequencies = self.spectro.Spectroscopy(D)
+        frequencies,solution = self.spectro.Spectroscopy(D)
 
-        return solution, frequencies
-
+        return  frequencies,solution
 ##############################################################################################################################
 
     
